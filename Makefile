@@ -1,4 +1,4 @@
 CC = gcc
 
 main: main.o
-		$(CC) main.c -o main -I include -L lib -lSDL2
+		$(CC) main.c -o chip8 -I include -L lib -lSDL2
