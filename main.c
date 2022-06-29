@@ -12,6 +12,7 @@ static ch8_t ch8;
 
 // Prototypes
 void initialize();
+bool load_rom(char *);
 void emulate_cycle();
 void beep();
 
@@ -21,7 +22,14 @@ int main() {
   initialize();
   printf("Emulator initialized!\n");
 
-  printf("Random memory char: %x\n", ch8.memory[0x2C0]);
+  if(!load_rom("IBM.ch8")) {
+    printf("Failed to load rom! Exiting...\n");
+    return 0;
+  }
+  printf("Rom Loaded...\n");
+  
+  int check_loc = 0x201;
+  printf("Hex at char location 0x%x: 0x%x\n", check_loc, ch8.memory[check_loc]);
   
   return 0;
 }
@@ -44,12 +52,26 @@ void initialize() {
  *  Completes one cycle (reads in one opcode) of the emulation.
  */
 
+bool load_rom(char *rom_name) {
+  
+  FILE *rom = 0;
+  rom = fopen(rom_name, "rb");
+
+  if (!rom) {
+    return false;
+  }
+
+  fread(ch8.memory + 0x200, RAM_SIZE - 0x200, 1, rom);
+
+  return true;
+} /* load_rom() */
+
 void emulate_cycle() {
 
   ch8.opcode = ch8.memory[ch8.pc] << 8 | ch8.memory[ch8.pc + 1];
 
   /*
-   * Decode the opcode.
+   * TODO:  Decode the opcode.
    */
 
   // Deincrement timers if necessary
@@ -104,4 +126,3 @@ void display_setup() {
 
   SDL_Quit();
 }
-
