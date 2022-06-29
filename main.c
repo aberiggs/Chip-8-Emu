@@ -9,7 +9,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#define DELAY_RATE (15)
+#define DELAY_RATE (1000/60) // 1000/60 is 60 FPS
+#define DISPLAY_SCALE (20)
 
 static ch8_t ch8; 
 
@@ -31,9 +32,6 @@ int main() {
     return 0;
   }
   printf("Rom Loaded...\n");
-  
-  int check_loc = 0x201;
-  printf("Hex at char location 0x%x: 0x%x\n", check_loc, ch8.memory[check_loc]);
 
   bool draw_flag = false;
 
@@ -42,23 +40,14 @@ int main() {
   SDL_Window *window;
 
   SDL_Init(SDL_INIT_EVERYTHING);
-  SDL_CreateWindowAndRenderer(640, 320, 0, &window, &renderer);
+  SDL_CreateWindowAndRenderer(DISPLAY_WIDTH * DISPLAY_SCALE,
+                              DISPLAY_HEIGHT * DISPLAY_SCALE, 0, &window,
+                              &renderer);
   SDL_RenderClear(renderer);
 
-  SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-  /*
-  for (int i = (4*64); i < (6*64); ++i) {
-    ch8.gfx[i] = 1; 
-  }
-
-  draw(&renderer);
-  printf("Drew\n");
-  */
-
   while (true) {
-    // TODO: x button quits the program.
-    if (SDL_PollEvent(&event)) {
-      continue;
+    if (SDL_PollEvent(&event) && event.type == SDL_QUIT) {
+      break;
     }
 
     emulate_cycle(&draw_flag);
@@ -70,14 +59,6 @@ int main() {
     // Set rate to a certain hz
     SDL_Delay(DELAY_RATE);
   }
- 
-  /*
-  while (1) {
-    if (SDL_PollEvent(&event) && event.type == SDL_QUIT) {
-      break;
-    }
-  }
-  */
 
   SDL_DestroyRenderer(renderer);
   SDL_DestroyWindow(window);
@@ -89,7 +70,7 @@ int main() {
 void initialize() {
   ch8 = (ch8_t) {0}; // Set everything to zero.
 
-  ch8.pc = 0x200;
+  ch8.pc = 0x200; // Program counter starts at where the rom is to be loaded.
   ch8.opcode = 0;
   ch8.I = 0;
   ch8.sp = 0;
@@ -124,13 +105,9 @@ bool load_rom(char *rom_name) {
 
 void emulate_cycle(bool *draw_flag) {
 
-  ch8.opcode = ch8.memory[ch8.pc] << 8 | ch8.memory[ch8.pc + 1];
+  ch8.opcode = ch8.memory[ch8.pc] << 8 | ch8.memory[ch8.pc + 1]; // Get opcode
 
-  ch8.pc += 2;
-
-  /*
-   * TODO:  Decode the opcode.
-   */
+  ch8.pc += 2; // Move to the next instruction.
 
   switch(ch8.opcode & 0xF000) {
     case 0x0000:
@@ -211,21 +188,21 @@ void emulate_cycle(bool *draw_flag) {
  */
 
 void draw(SDL_Renderer **renderer) {
-  printf("Drawing...\n");
 
+  // Clear the screen
   SDL_SetRenderDrawColor(*renderer, 0, 0, 0, 0);
   SDL_RenderClear(*renderer);
 
+  // Draw the graphics
   SDL_SetRenderDrawColor(*renderer, 255, 0, 0, 255);
-  for (int x = 0; x < 640; x++) {
-    for (int y = 0; y < 320; y++) {
-      if (ch8.gfx[(x/10) + (y/10) * 64] == 1) {
-        SDL_SetRenderDrawColor(*renderer, 255, 0, 0, 255);
+  for (int x = 0; x < DISPLAY_WIDTH * DISPLAY_SCALE; x++) {
+    for (int y = 0; y < DISPLAY_HEIGHT * DISPLAY_SCALE; y++) {
+      if (ch8.gfx[(x/DISPLAY_SCALE) + (y/DISPLAY_SCALE) * 64] == 1) {
         SDL_RenderDrawPoint(*renderer, x, y);
       }
     }
   } 
-  SDL_RenderPresent(*renderer);
+  SDL_RenderPresent(*renderer); // Display the changes
 } /* draw() */
 
 /*
@@ -235,32 +212,3 @@ void draw(SDL_Renderer **renderer) {
 void beep() {
   printf("Beep!");
 } /* beep() */
-
-void display_setup() { 
-  int scaling = 5;
-  int window_width = scaling * DISPLAY_WIDTH;
-  int window_height = scaling * DISPLAY_HEIGHT;
-
-  if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
-    printf("Error initializing SDL %s\n", SDL_GetError());
-  }
-
-
-  SDL_Window* win = SDL_CreateWindow("Chip-8", SDL_WINDOWPOS_CENTERED, 
-                                     SDL_WINDOWPOS_CENTERED, window_width,
-                                     window_height, SDL_WINDOW_RESIZABLE);
-
-  SDL_Event e;
-
-  bool quit = false;
-
-  while (!quit) {
-    while (SDL_PollEvent(&e)) {
-      if (e.type == SDL_QUIT) {
-        quit = true;
-      }
-    }
-  }
-
-  SDL_Quit();
-}
