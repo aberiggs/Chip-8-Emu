@@ -1,6 +1,9 @@
 #include "main.h"
 
 #include "include/SDL2/SDL.h"
+#include "include/SDL2/SDL_events.h"
+#include "include/SDL2/SDL_render.h"
+#include "include/SDL2/SDL_video.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -13,7 +16,8 @@ static ch8_t ch8;
 // Prototypes
 void initialize();
 bool load_rom(char *);
-void emulate_cycle();
+void emulate_cycle(bool *);
+void draw(SDL_Renderer **);
 void beep();
 
 int main() {
@@ -30,7 +34,55 @@ int main() {
   
   int check_loc = 0x201;
   printf("Hex at char location 0x%x: 0x%x\n", check_loc, ch8.memory[check_loc]);
+
+  bool draw_flag = false;
+
+  SDL_Event event;
+  SDL_Renderer *renderer;
+  SDL_Window *window;
+
+  SDL_Init(SDL_INIT_EVERYTHING);
+  SDL_CreateWindowAndRenderer(640, 320, 0, &window, &renderer);
+  SDL_RenderClear(renderer);
+
+  SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+  /*
+  for (int i = (4*64); i < (6*64); ++i) {
+    ch8.gfx[i] = 1; 
+  }
+
+  draw(&renderer);
+  printf("Drew\n");
+  */
+
+  while (true) {
+    // TODO: x button quits the program.
+    if (SDL_PollEvent(&event)) {
+      continue;
+    }
+
+    emulate_cycle(&draw_flag);
   
+    if (draw_flag) {
+      draw(&renderer);
+      draw_flag = false;
+    }
+    // Set rate to a certain hz
+    SDL_Delay(DELAY_RATE);
+  }
+ 
+  /*
+  while (1) {
+    if (SDL_PollEvent(&event) && event.type == SDL_QUIT) {
+      break;
+    }
+  }
+  */
+
+  SDL_DestroyRenderer(renderer);
+  SDL_DestroyWindow(window);
+  SDL_Quit();
+
   return 0;
 }
 
@@ -49,7 +101,7 @@ void initialize() {
 } /* initialize() */
 
 /*
- *  Completes one cycle (reads in one opcode) of the emulation.
+ *  Loads rom of given rom name.
  */
 
 bool load_rom(char *rom_name) {
@@ -66,13 +118,82 @@ bool load_rom(char *rom_name) {
   return true;
 } /* load_rom() */
 
-void emulate_cycle() {
+/*
+ *  Completes one cycle (reads in one opcode) of the emulation.
+ */
+
+void emulate_cycle(bool *draw_flag) {
 
   ch8.opcode = ch8.memory[ch8.pc] << 8 | ch8.memory[ch8.pc + 1];
+
+  ch8.pc += 2;
 
   /*
    * TODO:  Decode the opcode.
    */
+
+  switch(ch8.opcode & 0xF000) {
+    case 0x0000:
+      switch(ch8.opcode & 0x000F) {
+        case 0x0000: // 0x00E0: Clears the screen
+          // TODO: See if this can be optimized.
+          for (int i = 0;  i < (DISPLAY_WIDTH * DISPLAY_HEIGHT); i++) {
+            ch8.gfx[i] = 0;
+          }
+          break;
+
+        case 0x000E: // 0x00EE: Returns from subroutine
+          break;
+
+        default:
+          printf("Unknown opcode \"0x0000\": 0x%x\n", ch8.opcode);
+      }
+      break;
+
+    case 0x1000: // 0x1NNN: Jump, setting the PC to NNN
+      ch8.pc = ch8.opcode & 0x0FFF;
+      break;
+    
+    case 0x6000: // 0x6XNN: Set the register VX to NN
+      ch8.V[(ch8.opcode & 0x0F00) >> 8] = ch8.opcode & 0x00FF; 
+      break;
+
+    case 0x7000: // 0x7XNN: Add NN to register VX 
+      ch8.V[(ch8.opcode & 0x0F00) >> 8] += ch8.opcode & 0x00FF; 
+      break;
+
+    case 0xA000: // 0xANNN: Set index register ch8.I to NNN
+      ch8.I = ch8.opcode & 0x0FFF;
+      break;
+
+    case 0xD000: { // 0xDXYN: Draws sprites to screen.
+      // TODO: Rewrite this code in my own way.
+      unsigned short x = ch8.V[(ch8.opcode & 0x0F00) >> 8] % 64;
+      unsigned short y = ch8.V[(ch8.opcode & 0x00F0) >> 4] % 32;
+      unsigned short height = ch8.opcode & 0x000F;
+      unsigned short pixel = 0;
+
+      ch8.V[0xF] = 0;
+
+      for (int i = 0; i < height; i++) {
+        pixel = ch8.memory[ch8.I + i];
+        
+        for (int j = 0; j < 8; j++) {
+          if ((pixel & (0x80 >> j)) != 0) {
+            if (ch8.gfx[(x + j + ((y + i) * 64))] == 1) {
+              ch8.V[0xF] = 1;
+            }
+            ch8.gfx[x + j + ((y + i) * 64)] ^= 1;
+          }
+        }
+      }
+      *draw_flag = true;
+      break;
+    }
+
+    default:
+      printf("Unknown opcode: 0x%x\n", ch8.opcode);
+  }
 
   // Deincrement timers if necessary
   if (ch8.delay_timer > 0) {
@@ -83,12 +204,29 @@ void emulate_cycle() {
     beep();
     ch8.sound_timer--;
   }
-
-  // Set rate to a certain hz
-  SDL_Delay(DELAY_RATE);
-
 } /* emulateCycle() */
 
+/*
+ *  Draws to the surface.
+ */
+
+void draw(SDL_Renderer **renderer) {
+  printf("Drawing...\n");
+
+  SDL_SetRenderDrawColor(*renderer, 0, 0, 0, 0);
+  SDL_RenderClear(*renderer);
+
+  SDL_SetRenderDrawColor(*renderer, 255, 0, 0, 255);
+  for (int x = 0; x < 640; x++) {
+    for (int y = 0; y < 320; y++) {
+      if (ch8.gfx[(x/10) + (y/10) * 64] == 1) {
+        SDL_SetRenderDrawColor(*renderer, 255, 0, 0, 255);
+        SDL_RenderDrawPoint(*renderer, x, y);
+      }
+    }
+  } 
+  SDL_RenderPresent(*renderer);
+} /* draw() */
 
 /*
  *  Emits beeping noise on the system.
