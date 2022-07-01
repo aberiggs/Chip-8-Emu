@@ -27,7 +27,7 @@ int main() {
   initialize();
   printf("Emulator initialized!\n");
 
-  if(!load_rom("IBM.ch8")) {
+  if(!load_rom("test_opcode.ch8")) {
     printf("Failed to load rom! Exiting...\n");
     return 0;
   }
@@ -130,13 +130,99 @@ void emulate_cycle(bool *draw_flag) {
     case 0x1000: // 0x1NNN: Jump, setting the PC to NNN
       ch8.pc = ch8.opcode & 0x0FFF;
       break;
-    
+
+    case 0x3000: // 0x3XNN: Skip an instruction if VX is equal to NN
+      if (ch8.V[(ch8.opcode & 0x0F00) >> 8] == (ch8.opcode & 0x00FF)) {
+        ch8.pc += 2;
+      }
+      break;
+
+    case 0x4000: // 0x4XNN Skip an instruction if VX is not equal to NN
+      if (ch8.V[(ch8.opcode & 0x0F00) >> 8] != (ch8.opcode & 0x00FF)) {
+        ch8.pc += 2;
+      }
+      break;
+
+    case 0x5000: // 0x5XY0: Skips an instruction if VX and VY are equal
+      if (ch8.V[(ch8.opcode & 0x0F00) >> 8] ==
+          ch8.V[(ch8.opcode & 0x00F0) >> 4]) {
+        ch8.pc += 2;
+      }
+      break;
+
     case 0x6000: // 0x6XNN: Set the register VX to NN
       ch8.V[(ch8.opcode & 0x0F00) >> 8] = ch8.opcode & 0x00FF; 
       break;
 
     case 0x7000: // 0x7XNN: Add NN to register VX 
       ch8.V[(ch8.opcode & 0x0F00) >> 8] += ch8.opcode & 0x00FF; 
+      break;
+
+    case 0x8000:
+      switch(ch8.opcode & 0x000F) {
+        case 0x0000: // 0x8XY0: Set VX to VY
+          ch8.V[(ch8.opcode & 0x0F00) >> 8] =
+            ch8.V[(ch8.opcode & 0x00F0) >> 4];
+          break;
+
+        case 0x0001: // 0x8XY1: Set VX to binary or of VX and VY
+          ch8.V[(ch8.opcode & 0x0F00) >> 8] |=
+            ch8.V[(ch8.opcode & 0x00F0) >> 4];
+          break;
+
+        case 0x0002: // 0x8XY2: Set VX to binary and of VX and VY
+          ch8.V[(ch8.opcode & 0x0F00) >> 8] &=
+            ch8.V[(ch8.opcode & 0x00F0) >> 4];
+          break;
+
+        case 0x0003: // 0x8XY3: Set VX to binary xor of VX and VY
+          ch8.V[(ch8.opcode & 0x0F00) >> 8] ^=
+            ch8.V[(ch8.opcode & 0x00F0) >> 4];
+          break;
+
+        case 0x0004: // 0x8XY4: Set VX to VX plus VY
+          ch8.V[0xF] = 0;
+          if ((ch8.V[(ch8.opcode & 0x0F00) >> 8] +
+              ch8.V[(ch8.opcode & 0x00F0) >> 4]) > 255) {
+            ch8.V[0xF] = 1;
+          }
+          ch8.V[(ch8.opcode & 0x0F00) >> 8] +=
+            ch8.V[(ch8.opcode & 0x00F0) >> 4];
+          break;
+
+        case 0x0005: // 0x8XY5: VX is VX - VY
+          ch8.V[(ch8.opcode & 0x0F00) >> 8] -=
+            ch8.V[(ch8.opcode & 0x00F0) >> 4];
+
+          ch8.V[0xF] = 1;
+
+          if (ch8.V[(ch8.opcode & 0x0F00) >> 8] <
+              ch8.V[(ch8.opcode & 0x00F0) >> 4]) {
+            ch8.V[0xF] = 0;
+          }
+          break;
+
+        case 0x0006: // 0x8XY6: Shift VX one bit to the right
+          break;
+
+        case 0x0007: // 0x8XY5: VX is VY - VX
+          ch8.V[(ch8.opcode & 0x00F0) >> 4] -=
+            ch8.V[(ch8.opcode & 0x0F00) >> 8];
+
+          ch8.V[0xF] = 1;
+
+          if (ch8.V[(ch8.opcode & 0x0F00) >> 8] >
+              ch8.V[(ch8.opcode & 0x00F0) >> 4]) {
+            ch8.V[0xF] = 0;
+          }
+          break;
+      }
+
+    case 0x9000: // 0x9XY0: Skips an instruction if VX and VY are not equal
+      if (ch8.V[(ch8.opcode & 0x0F00) >> 8] !=
+          ch8.V[(ch8.opcode & 0x00F0) >> 4]) {
+        ch8.pc += 2;
+      }
       break;
 
     case 0xA000: // 0xANNN: Set index register ch8.I to NNN
