@@ -27,7 +27,7 @@ int main() {
   initialize();
   printf("Emulator initialized!\n");
 
-  if(!load_rom("test_opcode.ch8")) {
+  if(!load_rom("pong.rom")) {
     printf("Failed to load rom! Exiting...\n");
     return 0;
   }
@@ -120,6 +120,8 @@ void emulate_cycle(bool *draw_flag) {
           break;
 
         case 0x000E: // 0x00EE: Returns from subroutine
+          ch8.sp--;
+          ch8.pc = ch8.stack[ch8.sp];
           break;
 
         default:
@@ -129,6 +131,11 @@ void emulate_cycle(bool *draw_flag) {
 
     case 0x1000: // 0x1NNN: Jump, setting the PC to NNN
       ch8.pc = ch8.opcode & 0x0FFF;
+      break;
+
+    case 0x2000: // 0x2NNN: Push PC to stack and then set PC to NNN
+      ch8.stack[ch8.sp] = ch8.pc;
+      ch8.sp++;
       break;
 
     case 0x3000: // 0x3XNN: Skip an instruction if VX is equal to NN
@@ -203,6 +210,12 @@ void emulate_cycle(bool *draw_flag) {
           break;
 
         case 0x0006: // 0x8XY6: Shift VX one bit to the right
+          ch8.V[0xF] = 0;
+          if (ch8.V[(ch8.opcode & 0x0F00) >> 8] & 0x1) {
+            ch8.V[0xF] = 1;
+          }
+          ch8.V[(ch8.opcode & 0x0F00) >> 8] =
+            (ch8.V[(ch8.opcode & 0x0F00) >> 8] >> 1);
           break;
 
         case 0x0007: // 0x8XY5: VX is VY - VX
@@ -216,6 +229,19 @@ void emulate_cycle(bool *draw_flag) {
             ch8.V[0xF] = 0;
           }
           break;
+
+        case 0x000E: /// 0x8XY6: Shift VX 1 bit left
+          ch8.V[0xF] = 0;
+          // TODO: Check this for bugs :)
+          if (ch8.V[(ch8.opcode & 0x0F00) >> 8] >> 3) {
+            ch8.V[0xF] = 1;
+          }
+          ch8.V[(ch8.opcode & 0x0F00) >> 8] =
+            (ch8.V[(ch8.opcode & 0x0F00) >> 8] << 1);
+          break;
+
+        default:
+          printf("Unknown opcode \"0x8000\": 0x%x\n", ch8.opcode);
       }
 
     case 0x9000: // 0x9XY0: Skips an instruction if VX and VY are not equal
@@ -227,6 +253,11 @@ void emulate_cycle(bool *draw_flag) {
 
     case 0xA000: // 0xANNN: Set index register ch8.I to NNN
       ch8.I = ch8.opcode & 0x0FFF;
+      break;
+
+    case 0xB000: // 0xBNNN: Jump with offset
+      ch8.pc = ch8.memory[(ch8.opcode & 0x0FFF) +
+               (ch8.V[(ch8.opcode & 0x0F00) >> 8])];
       break;
 
     case 0xD000: { // 0xDXYN: Draws sprites to screen.
@@ -280,7 +311,7 @@ void draw(SDL_Renderer **renderer) {
   SDL_RenderClear(*renderer);
 
   // Draw the graphics
-  SDL_SetRenderDrawColor(*renderer, 255, 0, 0, 255);
+  SDL_SetRenderDrawColor(*renderer, 255, 0, 255, 255);
   for (int x = 0; x < DISPLAY_WIDTH * DISPLAY_SCALE; x++) {
     for (int y = 0; y < DISPLAY_HEIGHT * DISPLAY_SCALE; y++) {
       if (ch8.gfx[(x/DISPLAY_SCALE) + (y/DISPLAY_SCALE) * 64] == 1) {
