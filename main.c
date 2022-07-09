@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #define DELAY_RATE (1000/60) // 1000/60 is 60 FPS
 #define DISPLAY_SCALE (20)
@@ -260,6 +261,11 @@ void emulate_cycle(bool *draw_flag) {
                (ch8.V[(ch8.opcode & 0x0F00) >> 8])];
       break;
 
+    case 0xC000: // 0xCXNN: Generates random number
+      srand(time(0));
+      ch8.V[(ch8.opcode & 0x0F00) >> 8] = (rand() & (ch8.opcode & 0x00FF));
+      break;
+
     case 0xD000: { // 0xDXYN: Draws sprites to screen.
       // TODO: Rewrite this code in my own way.
       unsigned short x = ch8.V[(ch8.opcode & 0x0F00) >> 8] % 64;
@@ -282,6 +288,36 @@ void emulate_cycle(bool *draw_flag) {
         }
       }
       *draw_flag = true;
+      break;
+    }
+
+    case 0xF000: { //TODO: Label what each opcode does.
+      switch (ch8.opcode & 0x00FF) {
+        case 0x0007:
+          ch8.V[(ch8.opcode & 0x0F00) >> 8] = ch8.delay_timer;
+          break;
+
+        case 0x0015:
+          ch8.delay_timer = ch8.V[(ch8.opcode & 0x0F00) >> 8];
+          break;
+
+        case 0x0018:
+          ch8.sound_timer = ch8.V[(ch8.opcode & 0x0F00) >> 8];
+          break;
+
+        case 0x001E:
+          ch8.I += ch8.V[(ch8.opcode & 0x0F00) >> 8];
+          break;
+
+        case 0x0033:
+        {
+          unsigned char num = ch8.V[(ch8.opcode & 0x0F00) >> 8];
+          ch8.memory[ch8.I] = num / 100; // Get hundreds place
+          ch8.memory[ch8.I + 1] = (num % 100) / 10; // Get tens place
+          ch8.memory[ch8.I + 2] = (num % 10); // Get ones place
+          break;
+        }
+      }
       break;
     }
 
