@@ -20,6 +20,7 @@ void initialize();
 bool load_rom(char *);
 void emulate_cycle(bool *);
 void draw(SDL_Renderer **);
+void handle_input(SDL_Event *);
 void beep();
 
 int main() {
@@ -50,6 +51,8 @@ int main() {
     if (SDL_PollEvent(&event) && event.type == SDL_QUIT) {
       break;
     }
+
+    handle_input(&event);
 
     emulate_cycle(&draw_flag);
   
@@ -262,7 +265,10 @@ void emulate_cycle(bool *draw_flag) {
       break;
 
     case 0xC000: // 0xCXNN: Generates random number
+
+      // Seed the random number.
       srand(time(0));
+
       ch8.V[(ch8.opcode & 0x0F00) >> 8] = (rand() & (ch8.opcode & 0x00FF));
       break;
 
@@ -291,26 +297,35 @@ void emulate_cycle(bool *draw_flag) {
       break;
     }
 
+    case 0xE000: {
+      switch(ch8.opcode & 0x000F) {
+        case 0x000E: // 0xEX9E
+          break;
+        case 0x0001: // 0xEXA1
+          break;
+      }
+      break;
+    }
+
     case 0xF000: { //TODO: Label what each opcode does.
       switch (ch8.opcode & 0x00FF) {
-        case 0x0007:
+        case 0x0007: // 0xFX07: VX becomes current value of timer
           ch8.V[(ch8.opcode & 0x0F00) >> 8] = ch8.delay_timer;
           break;
 
-        case 0x0015:
+        case 0x0015: // 0xFX15: Sets delay timer to VX
           ch8.delay_timer = ch8.V[(ch8.opcode & 0x0F00) >> 8];
           break;
 
-        case 0x0018:
+        case 0x0018: // 0xFX18: Sets sound timer to VX
           ch8.sound_timer = ch8.V[(ch8.opcode & 0x0F00) >> 8];
           break;
 
-        case 0x001E:
+        case 0x001E: // 0xFX1E: Add VX to index register I
           ch8.I += ch8.V[(ch8.opcode & 0x0F00) >> 8];
           break;
 
-        case 0x0033:
-        {
+        case 0x0033: { // 0xFX33: "Binary-coded decimal conversion"
           unsigned char num = ch8.V[(ch8.opcode & 0x0F00) >> 8];
           ch8.memory[ch8.I] = num / 100; // Get hundreds place
           ch8.memory[ch8.I + 1] = (num % 100) / 10; // Get tens place
@@ -359,9 +374,28 @@ void draw(SDL_Renderer **renderer) {
 } /* draw() */
 
 /*
+ *  Handles user input through taking in an event.
+ */
+
+void handle_input(SDL_Event *event) {
+  switch((*event).type) {
+    case SDL_KEYDOWN:
+      printf("Key down!\n");
+      break;
+
+    case SDL_KEYUP:
+      printf("Key up!\n");
+      break;
+
+    default:
+      break;
+  }
+}
+
+/*
  *  Emits beeping noise on the system.
  */
 
 void beep() {
-  printf("Beep!");
+  printf("Beep!\n");
 } /* beep() */
